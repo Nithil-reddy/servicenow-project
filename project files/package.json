@@ -1,0 +1,14 @@
+{
+  "name": "servicenow-rbac-workflow-simulator",
+  "version": "1.0.0",
+  "description": "Interactive ServiceNow Role-Based Access Control and Workflow Simulator",
+  "main": "index.html",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "vite": "^5.0.0"
+  }
+}

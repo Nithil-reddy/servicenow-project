@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ServiceNow RBAC & Workflow Simulator</title>
+  <!-- FontAwesome for Premium Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Core Design Styles -->
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Top Navigation Header -->
+  <header class="sn-header">
+    <div class="sn-logo-area">
+      <div class="sn-logo-icon">sn</div>
+      <div class="sn-logo-text">ServiceNow</div>
+      <span class="sn-logo-badge">RBAC & Workflow Simulator</span>
+    </div>
+
+    <div class="sn-controls">
+      <!-- User Impersonation Dropdown -->
+      <div class="impersonate-wrapper">
+        <span class="impersonate-label"><i class="fa-solid fa-user-secret"></i> Impersonate:</span>
+        <select id="impersonateSelect" class="impersonate-select">
+          <option value="admin">System Administrator (Admin)</option>
+          <option value="alice">Alice (Project Manager)</option>
+          <option value="bob">Bob (Team Member)</option>
+          <option value="guest">Guest (No Roles)</option>
+        </select>
+      </div>
+
+      <!-- Action buttons -->
+      <button id="runTestsBtn" class="btn btn-primary"><i class="fa-solid fa-play"></i> Run Security Tests</button>
+      
+      <!-- Notification Center -->
+      <div class="p-relative">
+        <button id="notifBellBtn" class="notification-bell-btn">
+          <i class="fa-solid fa-bell"></i>
+          <span id="notifBadge" class="notification-badge"></span>
+        </button>
+        
+        <!-- Notification Slider Dropdown -->
+        <div id="notifSlider" class="notification-slider">
+          <div class="notif-header">
+            <span class="notif-title">Email Notification Log (sys_email)</span>
+            <button id="clearNotifsBtn" class="notif-clear-btn">Clear All</button>
+          </div>
+          <div id="notifList" class="notif-list">
+            <!-- Notifications injected dynamically -->
+            <div class="notif-empty">No notifications sent. Try triggering a workflow!</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Workspace -->
+  <div class="sn-workspace">
+
+    <!-- Left Navigation Filter Sidebar -->
+    <aside class="sn-sidebar">
+      <div class="navigator-filter">
+        <input type="text" id="navFilter" placeholder="Filter navigator..." autocomplete="off">
+      </div>
+
+      <nav class="nav-menu" id="navMenu">
+        <!-- Self-Service / Project Management -->
+        <div class="nav-section">
+          <div class="nav-section-title">
+            <span>Project Management</span>
+          </div>
+          <a class="nav-item active" data-target="projects">
+            <i class="fa-solid fa-folder-open"></i>
+            <span>Projects</span>
+            <span class="nav-badge-acl d-none" id="projectsAclBadge">Blocked</span>
+          </a>
+          <a class="nav-item" data-target="tasks">
+            <i class="fa-solid fa-list-check"></i>
+            <span>Project Tasks</span>
+          </a>
+        </div>
+
+        <!-- Configuration Settings (System Admin Only) -->
+        <div class="nav-section" id="adminNavSection">
+          <div class="nav-section-title">
+            <span>System Administration</span>
+          </div>
+          <a class="nav-item" data-target="users">
+            <i class="fa-solid fa-users"></i>
+            <span>Users</span>
+          </a>
+          <a class="nav-item" data-target="groups">
+            <i class="fa-solid fa-users-gear"></i>
+            <span>Groups</span>
+          </a>
+          <a class="nav-item" data-target="roles">
+            <i class="fa-solid fa-shield-halved"></i>
+            <span>Roles</span>
+          </a>
+          <a class="nav-item" data-target="acls">
+            <i class="fa-solid fa-lock"></i>
+            <span>Access Control (ACLs)</span>
+          </a>
+          <a class="nav-item" data-target="flows">
+            <i class="fa-solid fa-diagram-project"></i>
+            <span>Flow Designer (Workflows)</span>
+          </a>
+        </div>
+
+        <!-- Export / Developer View -->
+        <div class="nav-section">
+          <div class="nav-section-title">
+            <span>Developer Resource</span>
+          </div>
+          <a class="nav-item" data-target="xml-preview">
+            <i class="fa-solid fa-file-code"></i>
+            <span>Update Set XML</span>
+          </a>
+        </div>
+      </nav>
+
+      <!-- Active User Profile Status Bar -->
+      <div class="user-profile-footer">
+        <div class="user-avatar" id="footerAvatar">AD</div>
+        <div class="user-info">
+          <span class="user-display-name" id="footerUserName">System Administrator</span>
+          <span class="user-role-tag" id="footerUserRole">Admin (Full Access)</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Workspace Content Container -->
+    <main class="sn-main">
+      <!-- Breadcrumbs and Action Header -->
+      <div class="main-header">
+        <div class="breadcrumbs-area">
+          <div class="breadcrumbs">
+            <span>Home</span>
+            <span class="separator"></span>
+            <span id="breadcrumbSection">Project Management</span>
+            <span class="separator"></span>
+            <span class="current" id="breadcrumbPage">Projects</span>
+          </div>
+          <h1 class="page-title" id="mainPageTitle">Projects</h1>
+        </div>
+
+        <div class="header-actions">
+          <button id="actionBtn" class="btn btn-primary"><i class="fa-solid fa-plus"></i> New Record</button>
+        </div>
+      </div>
+
+      <!-- Main Dynamic Content Body -->
+      <div class="main-body" id="mainBody">
+
+        <!-- 1. Access Denied State (Hidden by default) -->
+        <div id="accessDeniedState" class="access-denied-container d-none">
+          <div class="access-denied-icon"><i class="fa-solid fa-shield-halved"></i></div>
+          <h2 class="access-denied-title">Security Constraint Prevented Access</h2>
+          <p class="access-denied-desc">
+            You do not have the required roles or permissions to access this table or record list. 
+            The system security manager enforces Access Control Lists (ACLs) based on your active role context.
+          </p>
+          <div style="margin-top: 10px;">
+            <p style="font-size: 13px; color: var(--text-muted);">
+              <strong>Enforced ACL:</strong> <code class="monospace" style="color: var(--danger);">u_project.* (Read)</code>
+            </p>
+          </div>
+        </div>
+
+        <!-- 2. Projects List View (Active by default) -->
+        <div id="projectsListView" class="table-card">
+          <div class="table-header-toolbar">
+            <div class="search-records">
+              <i class="fa-solid fa-magnifying-glass"></i>
+              <input type="text" id="searchProjects" placeholder="Search Projects...">
+            </div>
+            <div class="flex-row-center">
+              <span class="text-muted" style="font-size: 13px;" id="projectsCount">Showing 2 records</span>
+            </div>
+          </div>
+          <div class="sn-table-wrapper">
+            <table class="sn-table">
+              <thead>
+                <tr>
+                  <th>Number</th>
+                  <th>Project Name</th>
+                  <th>Project Manager</th>
+                  <th>Status</th>
+                  <th>Description</th>
+                  <th style="width: 100px; text-align: center;">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="projectsTableBody">
+                <!-- Dynamically populated -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 3. Tasks List View (Hidden by default) -->
+        <div id="tasksListView" class="table-card d-none">
+          <div class="table-header-toolbar">
+            <div class="search-records">
+              <i class="fa-solid fa-magnifying-glass"></i>
+              <input type="text" id="searchTasks" placeholder="Search Tasks...">
+            </div>
+            <div class="flex-row-center">
+              <span class="text-muted" style="font-size: 13px; margin-right: 12px;" id="tasksCount">Showing 3 records</span>
+              <button id="triggerSlaJobBtn" class="btn btn-secondary btn-danger" style="font-size: 12px; padding: 4px 10px;"><i class="fa-solid fa-clock"></i> Run SLA Overdue Check</button>
+            </div>
+          </div>
+          <div class="sn-table-wrapper">
+            <table class="sn-table">
+              <thead>
+                <tr>
+                  <th>Number</th>
+                  <th>Short Description</th>
+                  <th>Project</th>
+                  <th>Assigned To</th>
+                  <th>State</th>
+                  <th>Escalated</th>
+                  <th>Due Date</th>
+                  <th style="width: 100px; text-align: center;">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="tasksTableBody">
+                <!-- Dynamically populated -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 4. Administration Tables (Generic List View Dashboard, hidden by default) -->
+        <div id="adminListView" class="table-card d-none">
+          <div class="table-header-toolbar">
+            <div class="search-records">
+              <i class="fa-solid fa-magnifying-glass"></i>
+              <input type="text" id="searchAdmin" placeholder="Filter config records...">
+            </div>
+            <span class="text-muted" style="font-size: 13px;" id="adminCount">Showing metadata records</span>
+          </div>
+          <div class="sn-table-wrapper">
+            <table class="sn-table">
+              <thead id="adminTableHeader">
+                <!-- Headers dynamically generated -->
+              </thead>
+              <tbody id="adminTableBody">
+                <!-- Populated dynamically -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 5. Flow Designer Workflow Simulator View (Hidden by default) -->
+        <div id="flowDesignerView" class="table-card d-none" style="padding: 24px;">
+          <div style="margin-bottom: 20px;">
+            <h3 style="font-family: var(--font-display); font-size: 18px; margin-bottom: 8px;"><i class="fa-solid fa-diagram-project" style="color: var(--primary);"></i> ServiceNow Flow Designer: u_project_task_assignment_escalation_flow</h3>
+            <p style="color: var(--text-muted); font-size: 13px; line-height: 1.5;">This designer visualizes the automated operations triggered on the task table. The rules simulated below execute automatically in real-time when project task database actions occur.</p>
+          </div>
+          
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+            <!-- Flow visual representation -->
+            <div style="background-color: rgba(5, 8, 16, 0.4); border: 1px solid var(--border-color); border-radius: 8px; padding: 20px;">
+              <h4 style="font-size: 14px; margin-bottom: 16px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">Flow Steps</h4>
+              <div style="display: flex; flex-direction: column; gap: 16px; position: relative;">
+                
+                <div style="display: flex; gap: 12px; align-items: flex-start;">
+                  <div style="background-color: var(--info-bg); color: var(--info); border: 1px solid var(--info); border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex-shrink: 0;">T</div>
+                  <div>
+                    <h5 style="font-size: 13px; font-weight: 600;">TRIGGER: Record Created</h5>
+                    <p style="font-size: 11px; color: var(--text-muted);">Table: Project Task [u_project_task]</p>
+                  </div>
+                </div>
+
+                <div style="display: flex; gap: 12px; align-items: flex-start;">
+                  <div style="background-color: var(--primary-glow); color: var(--primary); border: 1px solid var(--primary); border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex-shrink: 0;">1</div>
+                  <div>
+                    <h5 style="font-size: 13px; font-weight: 600;">ACTION 1: Auto-Assignment Engine</h5>
+                    <p style="font-size: 11px; color: var(--text-muted);">If "Assigned To" is empty, look up "Project Team Members" group and assign (Bob Member).</p>
+                  </div>
+                </div>
+
+                <div style="display: flex; gap: 12px; align-items: flex-start;">
+                  <div style="background-color: var(--primary-glow); color: var(--primary); border: 1px solid var(--primary); border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex-shrink: 0;">2</div>
+                  <div>
+                    <h5 style="font-size: 13px; font-weight: 600;">ACTION 2: Send Assignment Notification</h5>
+                    <p style="font-size: 11px; color: var(--text-muted);">Create notification (sys_email) directed to assigned team member.</p>
+                  </div>
+                </div>
+
+                <div style="display: flex; gap: 12px; align-items: flex-start;">
+                  <div style="background-color: var(--primary-glow); color: var(--primary); border: 1px solid var(--primary); border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex-shrink: 0;">3</div>
+                  <div>
+                    <h5 style="font-size: 13px; font-weight: 600;">ACTION 3: State Transition</h5>
+                    <p style="font-size: 11px; color: var(--text-muted);">Automatically move Task State to 'Work in Progress' on assignment.</p>
+                  </div>
+                </div>
+
+                <div style="display: flex; gap: 12px; align-items: flex-start;">
+                  <div style="background-color: var(--warning-bg); color: var(--warning); border: 1px solid var(--warning); border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex-shrink: 0;">E</div>
+                  <div>
+                    <h5 style="font-size: 13px; font-weight: 600;">SLA ESCALATION RULE: Overdue Check</h5>
+                    <p style="font-size: 11px; color: var(--text-muted);">If current date exceeds task due date and state is not closed:<br>- Update escalated = true<br>- Increase priority = 1 (Critical)<br>- Notify Project Manager (Alice)</p>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+
+            <!-- Workflow statistics and validation settings -->
+            <div style="background-color: rgba(5, 8, 16, 0.4); border: 1px solid var(--border-color); border-radius: 8px; padding: 20px; display: flex; flex-direction: column; gap: 16px;">
+              <h4 style="font-size: 14px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; display: flex; justify-content: space-between;">
+                <span>Active Execution Metrics</span>
+                <span style="color: var(--primary); font-size: 12px;"><i class="fa-solid fa-circle-nodes"></i> Flow Active</span>
+              </h4>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; text-align: center;">
+                <div style="background: rgba(30, 41, 59, 0.3); border: 1px solid var(--border-color); padding: 12px; border-radius: 6px;">
+                  <div style="font-size: 18px; font-weight: 700; color: var(--primary);" id="metricRuns">3</div>
+                  <div style="font-size: 10px; color: var(--text-muted); text-transform: uppercase;">Total Executions</div>
+                </div>
+                <div style="background: rgba(30, 41, 59, 0.3); border: 1px solid var(--border-color); padding: 12px; border-radius: 6px;">
+                  <div style="font-size: 18px; font-weight: 700; color: var(--info);" id="metricNotifs">3</div>
+                  <div style="font-size: 10px; color: var(--text-muted); text-transform: uppercase;">Notifications Created</div>
+                </div>
+                <div style="background: rgba(30, 41, 59, 0.3); border: 1px solid var(--border-color); padding: 12px; border-radius: 6px;">
+                  <div style="font-size: 18px; font-weight: 700; color: var(--warning);" id="metricEscalations">0</div>
+                  <div style="font-size: 10px; color: var(--text-muted); text-transform: uppercase;">Escalated Tasks</div>
+                </div>
+                <div style="background: rgba(30, 41, 59, 0.3); border: 1px solid var(--border-color); padding: 12px; border-radius: 6px;">
+                  <div style="font-size: 18px; font-weight: 700; color: var(--success);">100%</div>
+                  <div style="font-size: 10px; color: var(--text-muted); text-transform: uppercase;">Success Rate</div>
+                </div>
+              </div>
+
+              <div>
+                <h5 style="font-size: 12px; color: var(--text-muted); margin-bottom: 8px;">Trigger Manual Assignments & Workflows</h5>
+                <p style="font-size: 12px; color: var(--text-muted); line-height: 1.4; margin-bottom: 12px;">Create tasks on the <strong>Project Tasks</strong> tab to see the active trigger execute immediately. Click below to simulate triggering SLA checks across all tasks.</p>
+                <button id="triggerSlaWorkflowPageBtn" class="btn btn-primary" style="width: 100%;"><i class="fa-solid fa-clock"></i> Run SLA Evaluation Engine</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 6. Developer XML Preview View (Hidden by default) -->
+        <div id="xmlPreviewView" class="xml-container d-none">
+          <div class="xml-toolbar">
+            <span class="xml-title-info"><i class="fa-solid fa-file-code"></i> update_set_rbac_workflow.xml (ServiceNow XML Serialization)</span>
+            <button id="copyXmlBtn" class="btn btn-secondary" style="font-size: 12px; padding: 4px 10px;"><i class="fa-solid fa-copy"></i> Copy XML Content</button>
+          </div>
+          <div class="xml-viewer-code" id="xmlViewer">
+            <!-- XML loaded dynamically -->
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Live Workflow Console Log -->
+      <footer class="workflow-console">
+        <div class="console-header">
+          <div class="console-title">
+            <span class="console-pulse"></span>
+            <span>Flow Designer / System Workflow Console</span>
+          </div>
+          <div class="console-actions">
+            <button id="clearLogsBtn" class="console-btn"><i class="fa-solid fa-trash-can"></i> Clear Logs</button>
+          </div>
+        </div>
+        <div class="console-logs" id="consoleLogs">
+          <!-- Logs populate here -->
+        </div>
+      </footer>
+    </main>
+
+    <!-- Slide-out Security Test Case Runner -->
+    <div id="testRunnerPanel" class="side-panel">
+      <div class="panel-header">
+        <span class="panel-title"><i class="fa-solid fa-vial" style="color: var(--primary);"></i> RBAC & ACL Test Suite</span>
+        <button id="closeTestPanelBtn" class="icon-btn" style="font-size: 18px;"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="panel-body">
+        <div class="test-run-summary">
+          <div class="summary-stat">
+            <span class="stat-value total" id="totalTestCount">6</span>
+            <span class="stat-label">Total</span>
+          </div>
+          <div class="summary-stat">
+            <span class="stat-value passed" id="passedTestCount">0</span>
+            <span class="stat-label">Passed</span>
+          </div>
+          <div class="summary-stat">
+            <span class="stat-value failed" id="failedTestCount">0</span>
+            <span class="stat-label">Failed</span>
+          </div>
+        </div>
+
+        <div class="test-cases-list" id="testCasesList">
+          <!-- Dynamically populated -->
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- MODAL: Project Record Form -->
+  <div id="projectModal" class="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 class="modal-title" id="projectModalTitle">New Project Record</h3>
+        <button class="modal-close" onclick="closeProjectModal()"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <form id="projectForm">
+        <div class="modal-body">
+          <div class="form-info-banner" id="projectFormAclBanner">
+            <i class="fa-solid fa-circle-info"></i>
+            <div>
+              <strong>Active Security Rule:</strong> Only users with the <code class="monospace">u_project_manager</code> role can create, update, or delete project records.
+            </div>
+          </div>
+          
+          <input type="hidden" id="projectId">
+          
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="projectNumber">Number (Auto)</label>
+              <input type="text" id="projectNumber" placeholder="PRJ0010001" disabled>
+            </div>
+            <div class="form-group">
+              <label for="projectName">Project Name *</label>
+              <input type="text" id="projectName" placeholder="Enter project title" required>
+            </div>
+            
+            <div class="form-group">
+              <label for="projectManager">Project Manager</label>
+              <select id="projectManager">
+                <!-- PM references -->
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="projectStatus">Status</label>
+              <select id="projectStatus">
+                <option value="New">New</option>
+                <option value="Planning">Planning</option>
+                <option value="Active">Active</option>
+                <option value="Completed">Completed</option>
+                <option value="Cancelled">Cancelled</option>
+              </select>
+            </div>
+
+            <div class="form-group form-group-full">
+              <label for="projectDescription">Description</label>
+              <textarea id="projectDescription" placeholder="Provide detailed project objectives..."></textarea>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeProjectModal()">Cancel</button>
+          <button type="button" id="deleteProjectBtn" class="btn btn-danger d-none">Delete Record</button>
+          <button type="submit" id="saveProjectBtn" class="btn btn-primary">Save Record</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: Task Record Form -->
+  <div id="taskModal" class="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 class="modal-title" id="taskModalTitle">New Task Record</h3>
+        <button class="modal-close" onclick="closeTaskModal()"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <form id="taskForm">
+        <div class="modal-body">
+          <div class="form-info-banner" id="taskFormAclBanner">
+            <i class="fa-solid fa-circle-info"></i>
+            <div>
+              <strong>Active Security Rule:</strong> Project Managers can fully write. Team Members can view and edit <strong>only</strong> if assigned to them.
+            </div>
+          </div>
+          
+          <input type="hidden" id="taskId">
+          
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="taskNumber">Number (Auto)</label>
+              <input type="text" id="taskNumber" placeholder="PRJTASK0010001" disabled>
+            </div>
+            <div class="form-group">
+              <label for="taskShortDesc">Short Description *</label>
+              <input type="text" id="taskShortDesc" placeholder="Brief summary of task" required>
+            </div>
+            
+            <div class="form-group">
+              <label for="taskProject">Parent Project *</label>
+              <select id="taskProject" required>
+                <!-- Projects dropdown populated dynamic -->
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="taskAssignedTo">Assigned To</label>
+              <select id="taskAssignedTo">
+                <option value="">-- Unassigned --</option>
+                <!-- Users dropdown -->
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="taskState">State</label>
+              <select id="taskState">
+                <option value="Open">Open</option>
+                <option value="Work in Progress">Work in Progress</option>
+                <option value="Closed Complete">Closed Complete</option>
+                <option value="Closed Skipped">Closed Skipped</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="taskPriority">Priority</label>
+              <select id="taskPriority">
+                <option value="p4">4 - Low</option>
+                <option value="p3">3 - Moderate</option>
+                <option value="p2">2 - High</option>
+                <option value="p1">1 - Critical</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="taskDueDate">Due Date</label>
+              <input type="datetime-local" id="taskDueDate">
+            </div>
+            <div class="form-group" style="flex-direction: row; align-items: center; justify-content: flex-start; gap: 8px; padding-top: 24px;">
+              <input type="checkbox" id="taskEscalated" disabled>
+              <label for="taskEscalated" style="margin-bottom: 0;">Task Escalated (Overdue)</label>
+            </div>
+
+            <div class="form-group form-group-full">
+              <label for="taskDescription">Detailed Description</label>
+              <textarea id="taskDescription" placeholder="Provide full assignment details..."></textarea>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeTaskModal()">Cancel</button>
+          <button type="button" id="deleteTaskBtn" class="btn btn-danger d-none">Delete Record</button>
+          <button type="submit" id="saveTaskBtn" class="btn btn-primary">Save Record</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Core Simulator Application Script -->
+  <script type="module" src="app.js"></script>
+</body>
+</html>
